@@ -34,11 +34,11 @@ extern UART_HandleTypeDef huart1;
 
 /* Module output pin mappings based on corrected IOC file */
 static const GPIO_Pin_t module_outputs[NUM_MODULES][OUTPUTS_PER_MODULE] = {
-    // Module 0: OUT3_0 (PE13), OUT2_0 (PE14), OUT1_0 (PE15), OUT3_0 (PB10)
+    // Module 0: OUT0_0 (PE13), OUT1_0 (PE14), OUT2_0 (PE15), OUT3_0 (PB10)
     {{GPIOE, GPIO_PIN_13}, {GPIOE, GPIO_PIN_14}, {GPIOE, GPIO_PIN_15}, {GPIOB, GPIO_PIN_10}},
     // Module 1: OUT0_1 (PD10), OUT1_1 (PD11), OUT2_1 (PD12), OUT3_1 (PD13)
     {{GPIOD, GPIO_PIN_10}, {GPIOD, GPIO_PIN_11}, {GPIOD, GPIO_PIN_12}, {GPIOD, GPIO_PIN_13}},
-    // Module 2: OUT0_2 (PG6), OUT0_2 (PG3), OUT1_2 (PG4/PG5)
+    // Module 2: OUT0_2 (PG6), OUT1_2 (PG3), OUT2_2 (PG4), OUT3_2 (PG5)
     {{GPIOG, GPIO_PIN_6}, {GPIOG, GPIO_PIN_3}, {GPIOG, GPIO_PIN_4}, {GPIOG, GPIO_PIN_5}},
     // Module 3: OUT0_3 (PA8), OUT1_3 (PA9), OUT2_3 (PA10), OUT3_3 (PA11)
     {{GPIOA, GPIO_PIN_8}, {GPIOA, GPIO_PIN_9}, {GPIOA, GPIO_PIN_10}, {GPIOA, GPIO_PIN_11}},
@@ -50,29 +50,29 @@ static const GPIO_Pin_t module_outputs[NUM_MODULES][OUTPUTS_PER_MODULE] = {
 
 /* Module enable pins (DEN_x) */
 static const GPIO_Pin_t module_enable[NUM_MODULES] = {
-    {GPIOE, GPIO_PIN_10},  // DEN_0 -> DSEL1_0 (corrected)
+    {GPIOE, GPIO_PIN_10},  // DEN_0
     {GPIOB, GPIO_PIN_15},  // DEN_1
     {GPIOD, GPIO_PIN_14},  // DEN_2
     {GPIOC, GPIO_PIN_7},   // DEN_3
-    {GPIOE, GPIO_PIN_11},  // DEN_4 (corrected)
+    {GPIOA, GPIO_PIN_15},  // DEN_4
     {GPIOD, GPIO_PIN_3}    // DEN_5
 };
 
 /* Module device select pins DSEL0 */
 static const GPIO_Pin_t module_dsel0[NUM_MODULES] = {
-    {GPIOE, GPIO_PIN_11},  // DSEL0_0 -> DEN_4 (corrected in IOC)
+    {GPIOE, GPIO_PIN_11},  // DSEL0_0
     {GPIOD, GPIO_PIN_8},   // DSEL0_1
-    {GPIOG, GPIO_PIN_2},   // DSEL0_2 (corrected)
+    {GPIOG, GPIO_PIN_2},   // DSEL0_2
     {GPIOC, GPIO_PIN_8},   // DSEL0_3
-    {GPIOE, GPIO_PIN_12},  // DSEL0_4 (corrected)
+    {GPIOC, GPIO_PIN_10},  // DSEL0_4
     {GPIOD, GPIO_PIN_4}    // DSEL0_5
 };
 
 /* Module device select pins DSEL1 */
 static const GPIO_Pin_t module_dsel1[NUM_MODULES] = {
-    {GPIOE, GPIO_PIN_12},  // DSEL1_0 -> DSEL0_4 (corrected in IOC)
+    {GPIOE, GPIO_PIN_12},  // DSEL1_0
     {GPIOD, GPIO_PIN_9},   // DSEL1_1
-    {GPIOD, GPIO_PIN_15},  // DSEL1_2 -> DSEL0_2 (corrected in IOC)
+    {GPIOD, GPIO_PIN_15},  // DSEL1_2
     {GPIOC, GPIO_PIN_9},   // DSEL1_3
     {GPIOC, GPIO_PIN_11},  // DSEL1_4
     {GPIOD, GPIO_PIN_5}    // DSEL1_5
@@ -88,19 +88,19 @@ static const GPIO_Pin_t digital_inputs[NUM_DIGITAL_INPUTS] = {
     {GPIOF, GPIO_PIN_5},   // IN_5
     {GPIOF, GPIO_PIN_4},   // IN_6
     {GPIOF, GPIO_PIN_3},   // IN_7
-    {GPIOF, GPIO_PIN_2},   // IN_8 -> IN_9 (corrected)
+    {GPIOF, GPIO_PIN_2},   // IN_8
     {GPIOE, GPIO_PIN_1},   // IN_9
     {GPIOE, GPIO_PIN_0},   // IN_10
     {GPIOB, GPIO_PIN_9},   // IN_11
     {GPIOB, GPIO_PIN_8},   // IN_12
     {GPIOB, GPIO_PIN_5},   // IN_13
     {GPIOB, GPIO_PIN_4},   // IN_14
-    {GPIOG, GPIO_PIN_15},  // IN_15 -> IN_16 (corrected)
-    {GPIOG, GPIO_PIN_14},  // IN_16 -> IN_17 (corrected)
-    {GPIOG, GPIO_PIN_13},  // IN_17 -> IN_18 (corrected)
-    {GPIOG, GPIO_PIN_12},  // IN_18 -> IN_19 (corrected)
-    {GPIOG, GPIO_PIN_11},  // IN_19 -> IN_20 (corrected)
-    {GPIOG, GPIO_PIN_11}   // IN_20 (placeholder, check schematic)
+    {GPIOG, GPIO_PIN_15},  // IN_15
+    {GPIOG, GPIO_PIN_14},  // IN_16
+    {GPIOG, GPIO_PIN_13},  // IN_17
+    {GPIOG, GPIO_PIN_12},  // IN_18
+    {GPIOG, GPIO_PIN_11},  // IN_19
+    {GPIOG, GPIO_PIN_11}   // IN_20 (duplicate of IN_19 - verify with schematic)
 };
 
 /* Private function prototypes -----------------------------------------------*/
