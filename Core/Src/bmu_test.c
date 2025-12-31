@@ -225,6 +225,11 @@ void BMU_Test_ProcessCommand(char cmd)
             BMU_Test_PrintMenu();
             break;
     }
+
+    // Don't re-print prompt after menu, it already shows it
+    if(cmd != CMD_HELP && cmd != CMD_SELF_TEST) {
+        BMU_Printf("\r\nEnter command: ");
+    }
 }
 
 /**
@@ -295,6 +300,9 @@ void BMU_Test_SelfTest(void)
     } else {
         BMU_Printf("\r\n✗ CRITICAL FAILURES. System check required.\r\n");
     }
+
+    // Show menu again
+    BMU_Test_PrintMenu();
 }
 
 /**

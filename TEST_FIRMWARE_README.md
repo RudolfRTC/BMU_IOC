@@ -27,7 +27,7 @@ Ta firmware omogoča testiranje vseh perifernih enot in I/O pinov na BMU sistemu
 #### CAN komunikacija
 - **CAN1**: PG0 (RX), PG1 (TX), PF15 (RS)
 - **CAN2**: PB12 (RX), PB13 (TX), PB14 (RS)
-- **Baudrate**: 333 kbps
+- **Baudrate**: 500 kbps (CAN 2.0B standard)
 
 #### SPI4 (IsoSPI)
 - **SCK**: PE2
@@ -104,12 +104,24 @@ Vsak modul ima:
 ### 2. Povezava
 
 Poveži se preko UART1 (115200 baud, 8N1):
+
+**POMEMBNO**: Izključi "Local Echo" v terminal programu, ker bo firmware sam prikazal ukaze in rezultate.
+
 ```bash
-# Linux/Mac
+# Linux/Mac - screen
 screen /dev/ttyUSB0 115200
 
-# Windows (PuTTY, Tera Term, itd.)
+# Linux/Mac - minicom (brez local echo)
+minicom -D /dev/ttyUSB0 -b 115200
+# V minicomu: Ctrl+A Z -> E (izklopiti Echo)
+
+# Windows - PuTTY
 # Port: COM_X, Baudrate: 115200
+# Terminal -> Local echo: Force off
+# Terminal -> Local line editing: Force off
+
+# Windows - Tera Term
+# Setup -> Terminal -> Local echo: OFF
 ```
 
 ### 3. Test meni
