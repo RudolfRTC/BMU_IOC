@@ -1,838 +1,290 @@
 /**
   ******************************************************************************
   * @file           : bmu_test.c
-  * @brief          : BMU Test Suite Implementation
-  ******************************************************************************
-  * @attention
-  *
-  * Battery Management Unit (BMU) Test Suite
-  * Tests all peripherals and I/O according to hardware schematic
-  *
+  * @brief          : BMU Simple Test Suite - Output test & Input monitoring
   ******************************************************************************
   */
 
 /* Includes ------------------------------------------------------------------*/
 #include "bmu_test.h"
-#include <stdarg.h>
+#include <stdio.h>
+#include <string.h>
 
-/* Private typedef -----------------------------------------------------------*/
-
-/* Private define ------------------------------------------------------------*/
-
-/* Private macro -------------------------------------------------------------*/
-
-/* Private variables ---------------------------------------------------------*/
-static TestStats_t test_stats = {0};
-static char printf_buffer[PRINTF_BUFFER_SIZE];
-
+/* External handles ----------------------------------------------------------*/
 extern ADC_HandleTypeDef hadc1;
-extern CAN_HandleTypeDef hcan1;
-extern CAN_HandleTypeDef hcan2;
-extern I2C_HandleTypeDef hi2c2;
-extern SPI_HandleTypeDef hspi4;
 extern UART_HandleTypeDef huart1;
 
-/* Module output pin mappings based on corrected IOC file */
-static const GPIO_Pin_t module_outputs[NUM_MODULES][OUTPUTS_PER_MODULE] = {
-    // Module 0: PE13, PE14, PE15, PB10 (OUT3_0, OUT2_0, OUT1_0, OUT3_0)
-    {{GPIOE, GPIO_PIN_13}, {GPIOE, GPIO_PIN_14}, {GPIOE, GPIO_PIN_15}, {GPIOB, GPIO_PIN_10}},
-    // Module 1: PD10, PD11, PD12, PD13 (OUT0_1, OUT1_1, OUT2_1, OUT3_1)
-    {{GPIOD, GPIO_PIN_10}, {GPIOD, GPIO_PIN_11}, {GPIOD, GPIO_PIN_12}, {GPIOD, GPIO_PIN_13}},
-    // Module 2: PG6, PG3, PG4, PG5 (OUT0_2, OUT0_2, OUT1_2, OUT1_2)
-    {{GPIOG, GPIO_PIN_6}, {GPIOG, GPIO_PIN_3}, {GPIOG, GPIO_PIN_4}, {GPIOG, GPIO_PIN_5}},
-    // Module 3: PA8, PA9, PA10, PA11 (OUT0_3, OUT1_3, OUT2_3, OUT3_3)
-    {{GPIOA, GPIO_PIN_8}, {GPIOA, GPIO_PIN_9}, {GPIOA, GPIO_PIN_10}, {GPIOA, GPIO_PIN_11}},
-    // Module 4: PC12, PD0, PD1, PD2 (OUT0_4, OUT1_4, OUT2_4, OUT3_4)
-    {{GPIOC, GPIO_PIN_12}, {GPIOD, GPIO_PIN_0}, {GPIOD, GPIO_PIN_1}, {GPIOD, GPIO_PIN_2}},
-    // Module 5: PD6, PD7, PG9, PG10 (OUT0_5, OUT1_5, OUT2_5, OUT3_5)
-    {{GPIOD, GPIO_PIN_6}, {GPIOD, GPIO_PIN_7}, {GPIOG, GPIO_PIN_9}, {GPIOG, GPIO_PIN_10}}
+/* Private variables ---------------------------------------------------------*/
+static char uart_buffer[256];
+
+// All GPIO outputs  (20 total outputs)
+typedef struct {
+    GPIO_TypeDef* port;
+    uint16_t pin;
+    const char* name;
+} Output_t;
+
+static const Output_t all_outputs[] = {
+    {GPIOB, GPIO_PIN_10, "OUT0_0"},
+    {GPIOE, GPIO_PIN_15, "OUT1_0"},
+    {GPIOE, GPIO_PIN_12, "OUT2_0"},
+    {GPIOE, GPIO_PIN_11, "OUT3_0"},
+    {GPIOD, GPIO_PIN_13, "OUT0_1"},
+    {GPIOD, GPIO_PIN_12, "OUT1_1"},
+    {GPIOD, GPIO_PIN_9,  "OUT2_1"},
+    {GPIOD, GPIO_PIN_8,  "OUT3_1"},
+    {GPIOG, GPIO_PIN_6,  "OUT0_2"},
+    {GPIOG, GPIO_PIN_5,  "OUT1_2"},
+    {GPIOG, GPIO_PIN_2,  "OUT2_2"},
+    {GPIOD, GPIO_PIN_15, "OUT3_2"},
+    {GPIOA, GPIO_PIN_8,  "OUT0_3"},
+    {GPIOA, GPIO_PIN_9,  "OUT1_3"},
+    {GPIOA, GPIO_PIN_10, "OUT2_3"},
+    {GPIOA, GPIO_PIN_11, "OUT3_3"},
+    {GPIOA, GPIO_PIN_15, "OUT0_4"},
+    {GPIOC, GPIO_PIN_10, "OUT1_4"},
+    {GPIOD, GPIO_PIN_0,  "OUT2_4"},
+    {GPIOD, GPIO_PIN_1,  "OUT3_4"}
 };
+#define NUM_OUTPUTS (sizeof(all_outputs) / sizeof(Output_t))
 
-/* Module enable pins (DEN_x) */
-static const GPIO_Pin_t module_enable[NUM_MODULES] = {
-    {GPIOE, GPIO_PIN_10},  // DEN_0 -> DSEL1_0 (corrected)
-    {GPIOB, GPIO_PIN_15},  // DEN_1
-    {GPIOD, GPIO_PIN_14},  // DEN_2
-    {GPIOC, GPIO_PIN_7},   // DEN_3
-    {GPIOE, GPIO_PIN_11},  // DEN_4 (corrected)
-    {GPIOD, GPIO_PIN_3}    // DEN_5
+// All digital inputs (20 inputs: IN_1 to IN_20)
+typedef struct {
+    GPIO_TypeDef* port;
+    uint16_t pin;
+    const char* name;
+} Input_t;
+
+static const Input_t all_digital_inputs[] = {
+    {GPIOF, GPIO_PIN_10, "IN_1"},
+    {GPIOF, GPIO_PIN_9,  "IN_2"},
+    {GPIOF, GPIO_PIN_8,  "IN_3"},
+    {GPIOF, GPIO_PIN_7,  "IN_4"},
+    {GPIOF, GPIO_PIN_6,  "IN_5"},
+    {GPIOF, GPIO_PIN_5,  "IN_6"},
+    {GPIOF, GPIO_PIN_4,  "IN_7"},
+    {GPIOF, GPIO_PIN_3,  "IN_8"},
+    {GPIOF, GPIO_PIN_2,  "IN_9"},
+    {GPIOE, GPIO_PIN_1,  "IN_10"},
+    {GPIOE, GPIO_PIN_0,  "IN_11"},
+    {GPIOB, GPIO_PIN_9,  "IN_12"},
+    {GPIOB, GPIO_PIN_8,  "IN_13"},
+    {GPIOB, GPIO_PIN_5,  "IN_14"},
+    {GPIOB, GPIO_PIN_4,  "IN_15"},
+    {GPIOG, GPIO_PIN_15, "IN_16"},
+    {GPIOG, GPIO_PIN_14, "IN_17"},
+    {GPIOG, GPIO_PIN_13, "IN_18"},
+    {GPIOG, GPIO_PIN_12, "IN_19"},
+    {GPIOG, GPIO_PIN_11, "IN_20"}
 };
+#define NUM_DIGITAL_INPUTS (sizeof(all_digital_inputs) / sizeof(Input_t))
 
-/* Module device select pins DSEL0 */
-static const GPIO_Pin_t module_dsel0[NUM_MODULES] = {
-    {GPIOE, GPIO_PIN_11},  // DSEL0_0 -> DEN_4 (corrected in IOC)
-    {GPIOD, GPIO_PIN_8},   // DSEL0_1
-    {GPIOG, GPIO_PIN_2},   // DSEL0_2 (corrected)
-    {GPIOC, GPIO_PIN_8},   // DSEL0_3
-    {GPIOE, GPIO_PIN_12},  // DSEL0_4 (corrected)
-    {GPIOD, GPIO_PIN_4}    // DSEL0_5
+// ADC channels (16 analog inputs)
+typedef struct {
+    uint32_t channel;
+    const char* name;
+} ADC_Channel_t;
+
+static const ADC_Channel_t adc_channels[] = {
+    {ADC_CHANNEL_0,  "LEM_1"},
+    {ADC_CHANNEL_1,  "LEM_2"},
+    {ADC_CHANNEL_2,  "LEM_3"},
+    {ADC_CHANNEL_3,  "LEM_4"},
+    {ADC_CHANNEL_4,  "LEM_5"},
+    {ADC_CHANNEL_5,  "LEM_6"},
+    {ADC_CHANNEL_6,  "LEM_7"},
+    {ADC_CHANNEL_7,  "LEM_8"},
+    {ADC_CHANNEL_8,  "LEM_9"},
+    {ADC_CHANNEL_9,  "LEM_10"},
+    {ADC_CHANNEL_10, "ADC_CH10"},
+    {ADC_CHANNEL_11, "ADC_CH11"},
+    {ADC_CHANNEL_12, "ADC_CH12"},
+    {ADC_CHANNEL_13, "ADC_CH13"},
+    {ADC_CHANNEL_14, "IS_4"},
+    {ADC_CHANNEL_15, "PWR_CURRENT"}
 };
-
-/* Module device select pins DSEL1 */
-static const GPIO_Pin_t module_dsel1[NUM_MODULES] = {
-    {GPIOE, GPIO_PIN_12},  // DSEL1_0 -> DSEL0_4 (corrected in IOC)
-    {GPIOD, GPIO_PIN_9},   // DSEL1_1
-    {GPIOD, GPIO_PIN_15},  // DSEL1_2 -> DSEL0_2 (corrected in IOC)
-    {GPIOC, GPIO_PIN_9},   // DSEL1_3
-    {GPIOC, GPIO_PIN_11},  // DSEL1_4
-    {GPIOD, GPIO_PIN_5}    // DSEL1_5
-};
-
-/* Digital input pins */
-static const GPIO_Pin_t digital_inputs[NUM_DIGITAL_INPUTS] = {
-    {GPIOF, GPIO_PIN_10},  // IN_0
-    {GPIOF, GPIO_PIN_9},   // IN_1
-    {GPIOF, GPIO_PIN_8},   // IN_2
-    {GPIOF, GPIO_PIN_7},   // IN_3
-    {GPIOF, GPIO_PIN_6},   // IN_4
-    {GPIOF, GPIO_PIN_5},   // IN_5
-    {GPIOF, GPIO_PIN_4},   // IN_6
-    {GPIOF, GPIO_PIN_3},   // IN_7
-    {GPIOF, GPIO_PIN_2},   // IN_8 -> IN_9 (corrected)
-    {GPIOE, GPIO_PIN_1},   // IN_9
-    {GPIOE, GPIO_PIN_0},   // IN_10
-    {GPIOB, GPIO_PIN_9},   // IN_11
-    {GPIOB, GPIO_PIN_8},   // IN_12
-    {GPIOB, GPIO_PIN_5},   // IN_13
-    {GPIOB, GPIO_PIN_4},   // IN_14
-    {GPIOG, GPIO_PIN_15},  // IN_15 -> IN_16 (corrected)
-    {GPIOG, GPIO_PIN_14},  // IN_16 -> IN_17 (corrected)
-    {GPIOG, GPIO_PIN_13},  // IN_17 -> IN_18 (corrected)
-    {GPIOG, GPIO_PIN_12},  // IN_18 -> IN_19 (corrected)
-    {GPIOG, GPIO_PIN_11},  // IN_19 -> IN_20 (corrected)
-    {GPIOG, GPIO_PIN_11}   // IN_20 (placeholder, check schematic)
-};
-
-/* Private function prototypes -----------------------------------------------*/
-static void update_stats(TestResult_t result);
-
-/* Public Functions ----------------------------------------------------------*/
-
-/**
-  * @brief  Initialize BMU test suite
-  */
-void BMU_Test_Init(void)
-{
-    BMU_Test_ResetStats();
-    BMU_Printf("\r\n=================================\r\n");
-    BMU_Printf("BMU Test Firmware v1.0\r\n");
-    BMU_Printf("STM32F413ZHT3 Battery Management Unit\r\n");
-    BMU_Printf("=================================\r\n\r\n");
-
-    // Initial power setup
-    BMU_Power_Enable24V(false);  // Start with power off
-    BMU_Power_Enable3V(false);
-    BMU_Power_Enable3V3A(false);
-    BMU_Power_Sleep(false);
-
-    // Disable all modules initially
-    for(uint8_t i = 0; i < NUM_MODULES; i++) {
-        BMU_Module_Enable(i, false);
-    }
-
-    // Turn off LED
-    HAL_GPIO_WritePin(GPIOG, GPIO_PIN_7, GPIO_PIN_RESET);
-
-    BMU_Printf("Initialization complete!\r\n");
-    BMU_Test_PrintMenu();
-}
-
-/**
-  * @brief  Print test menu
-  */
-void BMU_Test_PrintMenu(void)
-{
-    BMU_Printf("\r\n--- BMU Test Menu ---\r\n");
-    BMU_Printf("1. Test GPIO Outputs\r\n");
-    BMU_Printf("2. Test GPIO Inputs\r\n");
-    BMU_Printf("3. Test ADC Channels\r\n");
-    BMU_Printf("4. Test CAN Communication\r\n");
-    BMU_Printf("5. Test SPI4 (IsoSPI)\r\n");
-    BMU_Printf("6. Test I2C2\r\n");
-    BMU_Printf("7. Test UART1\r\n");
-    BMU_Printf("8. Test Power Control\r\n");
-    BMU_Printf("9. Run Full Self-Test\r\n");
-    BMU_Printf("l. LED Blink Test\r\n");
-    BMU_Printf("s. Show Statistics\r\n");
-    BMU_Printf("h. Show this menu\r\n");
-    BMU_Printf("\r\nEnter command: ");
-}
-
-/**
-  * @brief  Process test command
-  */
-void BMU_Test_ProcessCommand(char cmd)
-{
-    TestResult_t result;
-
-    switch(cmd) {
-        case CMD_GPIO_OUT:
-            BMU_Printf("\r\n=== GPIO Output Test ===\r\n");
-            result = BMU_Test_GPIO_Outputs();
-            break;
-
-        case CMD_GPIO_IN:
-            BMU_Printf("\r\n=== GPIO Input Test ===\r\n");
-            result = BMU_Test_GPIO_Inputs();
-            break;
-
-        case CMD_ADC:
-            BMU_Printf("\r\n=== ADC Test ===\r\n");
-            result = BMU_Test_ADC_AllChannels();
-            break;
-
-        case CMD_CAN:
-            BMU_Printf("\r\n=== CAN Test ===\r\n");
-            BMU_Test_CAN1();
-            BMU_Test_CAN2();
-            break;
-
-        case CMD_SPI:
-            BMU_Printf("\r\n=== SPI4 Test ===\r\n");
-            result = BMU_Test_SPI4();
-            break;
-
-        case CMD_I2C:
-            BMU_Printf("\r\n=== I2C2 Test ===\r\n");
-            result = BMU_Test_I2C2();
-            break;
-
-        case CMD_UART:
-            BMU_Printf("\r\n=== UART1 Loopback Test ===\r\n");
-            result = BMU_Test_UART1();
-            break;
-
-        case CMD_POWER:
-            BMU_Printf("\r\n=== Power Control Test ===\r\n");
-            result = BMU_Test_PowerControl();
-            break;
-
-        case CMD_SELF_TEST:
-            BMU_Test_SelfTest();
-            break;
-
-        case CMD_LED_BLINK:
-            BMU_Printf("\r\n=== LED Blink Test ===\r\n");
-            result = BMU_Test_LED();
-            break;
-
-        case CMD_STATS:
-            BMU_Test_PrintStats();
-            break;
-
-        case CMD_HELP:
-        default:
-            BMU_Test_PrintMenu();
-            break;
-    }
-
-    // Don't re-print prompt after menu, it already shows it
-    if(cmd != CMD_HELP && cmd != CMD_SELF_TEST) {
-        BMU_Printf("\r\nEnter command: ");
-    }
-}
-
-/**
-  * @brief  Run full self-test
-  */
-void BMU_Test_SelfTest(void)
-{
-    BMU_Printf("\r\n");
-    BMU_Printf("╔════════════════════════════════════╗\r\n");
-    BMU_Printf("║   BMU FULL SELF-TEST SEQUENCE      ║\r\n");
-    BMU_Printf("╚════════════════════════════════════╝\r\n\r\n");
-
-    BMU_Test_ResetStats();
-
-    // Test 1: LED
-    BMU_Printf("[1/10] LED Test...\r\n");
-    update_stats(BMU_Test_LED());
-
-    // Test 2: Power Control
-    BMU_Printf("[2/10] Power Control Test...\r\n");
-    update_stats(BMU_Test_PowerControl());
-
-    // Test 3: Power Good Signals
-    BMU_Printf("[3/10] Power Good Test...\r\n");
-    update_stats(BMU_Test_PowerGood());
-
-    // Test 4: GPIO Outputs
-    BMU_Printf("[4/10] GPIO Outputs Test...\r\n");
-    update_stats(BMU_Test_GPIO_Outputs());
-
-    // Test 5: GPIO Inputs
-    BMU_Printf("[5/10] GPIO Inputs Test...\r\n");
-    update_stats(BMU_Test_GPIO_Inputs());
-
-    // Test 6: ADC
-    BMU_Printf("[6/10] ADC Channels Test...\r\n");
-    update_stats(BMU_Test_ADC_AllChannels());
-
-    // Test 7: CAN
-    BMU_Printf("[7/10] CAN Test...\r\n");
-    update_stats(BMU_Test_CAN1());
-    update_stats(BMU_Test_CAN2());
-
-    // Test 8: SPI
-    BMU_Printf("[8/10] SPI4 Test...\r\n");
-    update_stats(BMU_Test_SPI4());
-
-    // Test 9: I2C
-    BMU_Printf("[9/10] I2C2 Test...\r\n");
-    update_stats(BMU_Test_I2C2());
-
-    // Test 10: UART
-    BMU_Printf("[10/10] UART1 Test...\r\n");
-    update_stats(BMU_Test_UART1());
-
-    // Print results
-    BMU_Printf("\r\n");
-    BMU_Printf("╔════════════════════════════════════╗\r\n");
-    BMU_Printf("║   SELF-TEST RESULTS                ║\r\n");
-    BMU_Printf("╚════════════════════════════════════╝\r\n");
-    BMU_Test_PrintStats();
-
-    uint32_t pass_rate = (test_stats.passed_tests * 100) / test_stats.total_tests;
-    if(pass_rate == 100) {
-        BMU_Printf("\r\n✓ ALL TESTS PASSED! System OK.\r\n");
-    } else if(pass_rate >= 80) {
-        BMU_Printf("\r\n⚠ SOME TESTS FAILED. Check results.\r\n");
-    } else {
-        BMU_Printf("\r\n✗ CRITICAL FAILURES. System check required.\r\n");
-    }
-
-    // Show menu again
-    BMU_Test_PrintMenu();
-}
-
-/**
-  * @brief  Test all GPIO outputs
-  */
-TestResult_t BMU_Test_GPIO_Outputs(void)
-{
-    BMU_Printf("Testing all module outputs...\r\n");
-
-    for(uint8_t module = 0; module < NUM_MODULES; module++) {
-        BMU_Printf("  Module %d: ", module);
-
-        // Enable module
-        BMU_Module_Enable(module, true);
-        HAL_Delay(10);
-
-        // Test all 4 outputs
-        for(uint8_t out = 0; out < OUTPUTS_PER_MODULE; out++) {
-            // Set HIGH
-            BMU_Module_SetOutput(module, out, true);
-            HAL_Delay(50);
-
-            // Set LOW
-            BMU_Module_SetOutput(module, out, false);
-            HAL_Delay(50);
-        }
-
-        // Disable module
-        BMU_Module_Enable(module, false);
-        BMU_Printf("OK\r\n");
-    }
-
-    BMU_Printf("GPIO Output Test: PASS\r\n");
-    return TEST_PASS;
-}
-
-/**
-  * @brief  Test all GPIO inputs
-  */
-TestResult_t BMU_Test_GPIO_Inputs(void)
-{
-    BMU_Printf("Reading all digital inputs (IN_0 to IN_20):\r\n");
-
-    for(uint8_t i = 0; i < NUM_DIGITAL_INPUTS; i++) {
-        bool state = BMU_Module_GetInput(i);
-        if(i % 5 == 0) BMU_Printf("\r\n  ");
-        BMU_Printf("IN_%d=%d  ", i, state);
-    }
-
-    BMU_Printf("\r\n\nGPIO Input Test: PASS\r\n");
-    return TEST_PASS;
-}
-
-/**
-  * @brief  Test specific module outputs
-  */
-TestResult_t BMU_Test_Module_Outputs(uint8_t module_num)
-{
-    if(module_num >= NUM_MODULES) {
-        return TEST_FAIL;
-    }
-
-    BMU_Printf("Testing Module %d outputs...\r\n", module_num);
-    BMU_Module_Enable(module_num, true);
-
-    for(uint8_t i = 0; i < OUTPUTS_PER_MODULE; i++) {
-        BMU_Module_SetOutput(module_num, i, true);
-        BMU_Printf("  OUT%d_%d = HIGH\r\n", i, module_num);
-        HAL_Delay(200);
-
-        BMU_Module_SetOutput(module_num, i, false);
-        BMU_Printf("  OUT%d_%d = LOW\r\n", i, module_num);
-        HAL_Delay(200);
-    }
-
-    BMU_Module_Enable(module_num, false);
-    return TEST_PASS;
-}
-
-/**
-  * @brief  Test LED blink
-  */
-TestResult_t BMU_Test_LED(void)
-{
-    BMU_Printf("Blinking LED (PG7) 5 times...\r\n");
-
-    for(uint8_t i = 0; i < 5; i++) {
-        HAL_GPIO_WritePin(GPIOG, GPIO_PIN_7, GPIO_PIN_SET);
-        HAL_Delay(200);
-        HAL_GPIO_WritePin(GPIOG, GPIO_PIN_7, GPIO_PIN_RESET);
-        HAL_Delay(200);
-    }
-
-    BMU_Printf("LED Test: PASS\r\n");
-    return TEST_PASS;
-}
-
-/**
-  * @brief  Test all ADC channels
-  */
-TestResult_t BMU_Test_ADC_AllChannels(void)
-{
-    uint32_t adc_value;
-    float voltage;
-
-    BMU_Printf("Reading all ADC channels (IN0-IN15):\r\n");
-
-    for(uint8_t ch = 0; ch < NUM_ADC_CHANNELS; ch++) {
-        // Start ADC conversion
-        HAL_ADC_Start(&hadc1);
-        if(HAL_ADC_PollForConversion(&hadc1, 100) == HAL_OK) {
-            adc_value = HAL_ADC_GetValue(&hadc1);
-            voltage = (adc_value * 3.3f) / 4095.0f;
-
-            if(ch % 4 == 0) BMU_Printf("\r\n  ");
-            BMU_Printf("CH%02d: %4lumV  ", ch, (uint32_t)(voltage * 1000));
-        } else {
-            BMU_Printf("\r\nADC channel %d timeout!\r\n", ch);
-            return TEST_FAIL;
-        }
-        HAL_ADC_Stop(&hadc1);
-    }
-
-    BMU_Printf("\r\n\nADC Test: PASS\r\n");
-    return TEST_PASS;
-}
-
-/**
-  * @brief  Test CAN1
-  */
-TestResult_t BMU_Test_CAN1(void)
-{
-    CAN_TxHeaderTypeDef tx_header;
-    uint8_t tx_data[8] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
-    uint32_t tx_mailbox;
-
-    BMU_Printf("Testing CAN1...\r\n");
-
-    // Configure CAN in normal mode (RS low)
-    BMU_CAN_SetMode(1, false);
-
-    // Start CAN
-    if(HAL_CAN_Start(&hcan1) != HAL_OK) {
-        BMU_Printf("CAN1 start failed!\r\n");
-        return TEST_FAIL;
-    }
-
-    // Configure TX header
-    tx_header.StdId = 0x123;
-    tx_header.ExtId = 0;
-    tx_header.RTR = CAN_RTR_DATA;
-    tx_header.IDE = CAN_ID_STD;
-    tx_header.DLC = 8;
-    tx_header.TransmitGlobalTime = DISABLE;
-
-    // Send test message
-    if(HAL_CAN_AddTxMessage(&hcan1, &tx_header, tx_data, &tx_mailbox) == HAL_OK) {
-        BMU_Printf("  CAN1 TX: ID=0x123, Data sent\r\n");
-        BMU_Printf("  CAN1 Test: PASS (Loopback required for RX)\r\n");
-        return TEST_PASS;
-    } else {
-        BMU_Printf("  CAN1 TX failed!\r\n");
-        return TEST_FAIL;
-    }
-}
-
-/**
-  * @brief  Test CAN2
-  */
-TestResult_t BMU_Test_CAN2(void)
-{
-    CAN_TxHeaderTypeDef tx_header;
-    uint8_t tx_data[8] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88};
-    uint32_t tx_mailbox;
-
-    BMU_Printf("Testing CAN2...\r\n");
-
-    // Configure CAN in normal mode (RS low)
-    BMU_CAN_SetMode(2, false);
-
-    // Start CAN
-    if(HAL_CAN_Start(&hcan2) != HAL_OK) {
-        BMU_Printf("CAN2 start failed!\r\n");
-        return TEST_FAIL;
-    }
-
-    // Configure TX header
-    tx_header.StdId = 0x456;
-    tx_header.ExtId = 0;
-    tx_header.RTR = CAN_RTR_DATA;
-    tx_header.IDE = CAN_ID_STD;
-    tx_header.DLC = 8;
-    tx_header.TransmitGlobalTime = DISABLE;
-
-    // Send test message
-    if(HAL_CAN_AddTxMessage(&hcan2, &tx_header, tx_data, &tx_mailbox) == HAL_OK) {
-        BMU_Printf("  CAN2 TX: ID=0x456, Data sent\r\n");
-        BMU_Printf("  CAN2 Test: PASS (Loopback required for RX)\r\n");
-        return TEST_PASS;
-    } else {
-        BMU_Printf("  CAN2 TX failed!\r\n");
-        return TEST_FAIL;
-    }
-}
-
-/**
-  * @brief  Test SPI4 (IsoSPI)
-  */
-TestResult_t BMU_Test_SPI4(void)
-{
-    uint8_t tx_data[4] = {0xAA, 0x55, 0xF0, 0x0F};
-    uint8_t rx_data[4] = {0};
-
-    BMU_Printf("Testing SPI4 (IsoSPI interface)...\r\n");
-
-    // Enable IsoSPI
-    HAL_GPIO_WritePin(GPIOE, GPIO_PIN_3, GPIO_PIN_SET);  // ISOSPI_EN
-    HAL_Delay(10);
-
-    // Transmit test data
-    if(HAL_SPI_TransmitReceive(&hspi4, tx_data, rx_data, 4, 1000) == HAL_OK) {
-        BMU_Printf("  SPI4 TX: 0x%02X 0x%02X 0x%02X 0x%02X\r\n",
-                   tx_data[0], tx_data[1], tx_data[2], tx_data[3]);
-        BMU_Printf("  SPI4 RX: 0x%02X 0x%02X 0x%02X 0x%02X\r\n",
-                   rx_data[0], rx_data[1], rx_data[2], rx_data[3]);
-        BMU_Printf("  SPI4 Test: PASS (Check with logic analyzer)\r\n");
-        return TEST_PASS;
-    } else {
-        BMU_Printf("  SPI4 communication failed!\r\n");
-        return TEST_FAIL;
-    }
-}
-
-/**
-  * @brief  Test I2C2
-  */
-TestResult_t BMU_Test_I2C2(void)
-{
-    uint8_t dev_addr = 0x48 << 1;  // Common temp sensor address
-    HAL_StatusTypeDef status;
-
-    BMU_Printf("Testing I2C2 (scanning for devices)...\r\n");
-
-    uint8_t found_devices = 0;
-    for(uint8_t addr = 0x08; addr < 0x78; addr++) {
-        status = HAL_I2C_IsDeviceReady(&hi2c2, addr << 1, 1, 10);
-        if(status == HAL_OK) {
-            BMU_Printf("  Found device at address 0x%02X\r\n", addr);
-            found_devices++;
-        }
-    }
-
-    if(found_devices > 0) {
-        BMU_Printf("  I2C2 Test: PASS (Found %d device(s))\r\n", found_devices);
-        return TEST_PASS;
-    } else {
-        BMU_Printf("  I2C2 Test: No devices found (check connections)\r\n");
-        return TEST_SKIP;
-    }
-}
-
-/**
-  * @brief  Test UART1
-  */
-TestResult_t BMU_Test_UART1(void)
-{
-    char test_msg[] = "UART1 Test OK\r\n";
-
-    BMU_Printf("Testing UART1...\r\n");
-
-    if(HAL_UART_Transmit(&huart1, (uint8_t*)test_msg, strlen(test_msg), 1000) == HAL_OK) {
-        BMU_Printf("  UART1 Test: PASS\r\n");
-        return TEST_PASS;
-    } else {
-        BMU_Printf("  UART1 Test: FAIL\r\n");
-        return TEST_FAIL;
-    }
-}
-
-/**
-  * @brief  Test power control
-  */
-TestResult_t BMU_Test_PowerControl(void)
-{
-    BMU_Printf("Testing power control signals...\r\n");
-
-    // Test 24V enable
-    BMU_Printf("  Enabling 24V power...\r\n");
-    BMU_Power_Enable24V(true);
-    HAL_Delay(100);
-
-    // Test 3V enable
-    BMU_Printf("  Enabling 3V power...\r\n");
-    BMU_Power_Enable3V(true);
-    HAL_Delay(100);
-
-    // Test 3V3A enable
-    BMU_Printf("  Enabling 3V3A power...\r\n");
-    BMU_Power_Enable3V3A(true);
-    HAL_Delay(100);
-
-    // Test sleep mode
-    BMU_Printf("  Entering sleep mode...\r\n");
-    BMU_Power_Sleep(true);
-    HAL_Delay(500);
-    BMU_Printf("  Exiting sleep mode...\r\n");
-    BMU_Power_Sleep(false);
-
-    BMU_Printf("  Power Control Test: PASS\r\n");
-    return TEST_PASS;
-}
-
-/**
-  * @brief  Test power good signals
-  */
-TestResult_t BMU_Test_PowerGood(void)
-{
-    bool pg_5v, pg_3v3a;
-
-    BMU_Printf("Reading power good signals...\r\n");
-
-    pg_5v = BMU_Power_Get5VGood();
-    pg_3v3a = BMU_Power_Get3V3AGood();
-
-    BMU_Printf("  5V Power Good: %s\r\n", pg_5v ? "OK" : "FAIL");
-    BMU_Printf("  3V3A Power Good: %s\r\n", pg_3v3a ? "OK" : "FAIL");
-
-    if(pg_5v && pg_3v3a) {
-        BMU_Printf("  Power Good Test: PASS\r\n");
-        return TEST_PASS;
-    } else {
-        BMU_Printf("  Power Good Test: FAIL (Check power supply)\r\n");
-        return TEST_FAIL;
-    }
-}
-
-/**
-  * @brief  Module control - Enable/Disable
-  */
-void BMU_Module_Enable(uint8_t module_num, bool enable)
-{
-    if(module_num >= NUM_MODULES) return;
-
-    GPIO_PinState state = enable ? GPIO_PIN_SET : GPIO_PIN_RESET;
-    HAL_GPIO_WritePin(module_enable[module_num].port,
-                     module_enable[module_num].pin, state);
-}
-
-/**
-  * @brief  Module control - Set output state
-  */
-void BMU_Module_SetOutput(uint8_t module_num, uint8_t output_num, bool state)
-{
-    if(module_num >= NUM_MODULES || output_num >= OUTPUTS_PER_MODULE) return;
-
-    GPIO_PinState pin_state = state ? GPIO_PIN_SET : GPIO_PIN_RESET;
-    HAL_GPIO_WritePin(module_outputs[module_num][output_num].port,
-                     module_outputs[module_num][output_num].pin, pin_state);
-}
-
-/**
-  * @brief  Module control - Set device select
-  */
-void BMU_Module_SetDeviceSelect(uint8_t module_num, uint8_t device_sel)
-{
-    if(module_num >= NUM_MODULES || device_sel > 3) return;
-
-    // DSEL0 bit
-    GPIO_PinState dsel0 = (device_sel & 0x01) ? GPIO_PIN_SET : GPIO_PIN_RESET;
-    HAL_GPIO_WritePin(module_dsel0[module_num].port,
-                     module_dsel0[module_num].pin, dsel0);
-
-    // DSEL1 bit
-    GPIO_PinState dsel1 = (device_sel & 0x02) ? GPIO_PIN_SET : GPIO_PIN_RESET;
-    HAL_GPIO_WritePin(module_dsel1[module_num].port,
-                     module_dsel1[module_num].pin, dsel1);
-}
-
-/**
-  * @brief  Read digital input
-  */
-bool BMU_Module_GetInput(uint8_t input_num)
-{
-    if(input_num >= NUM_DIGITAL_INPUTS) return false;
-
-    return HAL_GPIO_ReadPin(digital_inputs[input_num].port,
-                           digital_inputs[input_num].pin) == GPIO_PIN_SET;
-}
-
-/**
-  * @brief  Power control - 24V Enable
-  */
-void BMU_Power_Enable24V(bool enable)
-{
-    GPIO_PinState state = enable ? GPIO_PIN_SET : GPIO_PIN_RESET;
-    HAL_GPIO_WritePin(GPIOF, GPIO_PIN_13, state);  // PWR_24V_EN
-}
-
-/**
-  * @brief  Power control - 3V Enable
-  */
-void BMU_Power_Enable3V(bool enable)
-{
-    GPIO_PinState state = enable ? GPIO_PIN_SET : GPIO_PIN_RESET;
-    HAL_GPIO_WritePin(GPIOE, GPIO_PIN_7, state);  // 3V_EN (corrected)
-}
-
-/**
-  * @brief  Power control - 3V3A Enable
-  */
-void BMU_Power_Enable3V3A(bool enable)
-{
-    GPIO_PinState state = enable ? GPIO_PIN_SET : GPIO_PIN_RESET;
-    HAL_GPIO_WritePin(GPIOE, GPIO_PIN_8, state);  // EN_3V3A
-}
-
-/**
-  * @brief  Power control - Sleep mode
-  */
-void BMU_Power_Sleep(bool sleep)
-{
-    GPIO_PinState state = sleep ? GPIO_PIN_SET : GPIO_PIN_RESET;
-    HAL_GPIO_WritePin(GPIOF, GPIO_PIN_14, state);  // PWR_SLEEP
-}
-
-/**
-  * @brief  Read 5V power good
-  */
-bool BMU_Power_Get5VGood(void)
-{
-    return HAL_GPIO_ReadPin(GPIOF, GPIO_PIN_11) == GPIO_PIN_SET;  // PG_5V
-}
-
-/**
-  * @brief  Read 3V3A power good
-  */
-bool BMU_Power_Get3V3AGood(void)
-{
-    return HAL_GPIO_ReadPin(GPIOF, GPIO_PIN_12) == GPIO_PIN_SET;  // PG_3V3A
-}
-
-/**
-  * @brief  CAN control - Set mode (RS pin)
-  */
-void BMU_CAN_SetMode(uint8_t can_num, bool rs_high)
-{
-    GPIO_PinState state = rs_high ? GPIO_PIN_SET : GPIO_PIN_RESET;
-
-    if(can_num == 1) {
-        HAL_GPIO_WritePin(GPIOF, GPIO_PIN_15, state);  // CAN_RS (CAN1)
-    } else if(can_num == 2) {
-        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, state);  // CAN2_RS
-    }
-}
-
-/**
-  * @brief  Printf function via UART1
-  */
-void BMU_Printf(const char* format, ...)
-{
-    va_list args;
-    va_start(args, format);
-    vsnprintf(printf_buffer, PRINTF_BUFFER_SIZE, format, args);
-    va_end(args);
-
-    HAL_UART_Transmit(&huart1, (uint8_t*)printf_buffer, strlen(printf_buffer), HAL_MAX_DELAY);
-}
-
-/**
-  * @brief  Print test statistics
-  */
-void BMU_Test_PrintStats(void)
-{
-    BMU_Printf("\r\n--- Test Statistics ---\r\n");
-    BMU_Printf("Total Tests:  %lu\r\n", test_stats.total_tests);
-    BMU_Printf("Passed:       %lu\r\n", test_stats.passed_tests);
-    BMU_Printf("Failed:       %lu\r\n", test_stats.failed_tests);
-    BMU_Printf("Skipped:      %lu\r\n", test_stats.skipped_tests);
-
-    if(test_stats.total_tests > 0) {
-        uint32_t pass_rate = (test_stats.passed_tests * 100) / test_stats.total_tests;
-        BMU_Printf("Pass Rate:    %lu%%\r\n", pass_rate);
-    }
-}
-
-/**
-  * @brief  Reset test statistics
-  */
-void BMU_Test_ResetStats(void)
-{
-    test_stats.total_tests = 0;
-    test_stats.passed_tests = 0;
-    test_stats.failed_tests = 0;
-    test_stats.skipped_tests = 0;
-}
-
-/**
-  * @brief  Get test statistics
-  */
-TestStats_t* BMU_Test_GetStats(void)
-{
-    return &test_stats;
-}
-
-/**
-  * @brief  Delay wrapper
-  */
-void BMU_Test_Delay(uint32_t ms)
-{
-    HAL_Delay(ms);
-}
+#define NUM_ADC_CHANNELS (sizeof(adc_channels) / sizeof(ADC_Channel_t))
 
 /* Private functions ---------------------------------------------------------*/
 
 /**
-  * @brief  Update test statistics
+  * @brief  Print to UART
   */
-static void update_stats(TestResult_t result)
+static void print_uart(const char* str)
 {
-    test_stats.total_tests++;
+    HAL_UART_Transmit(&huart1, (uint8_t*)str, strlen(str), 1000);
+}
 
-    switch(result) {
-        case TEST_PASS:
-            test_stats.passed_tests++;
+/**
+  * @brief  Printf to UART
+  */
+static void printf_uart(const char* format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    vsnprintf(uart_buffer, sizeof(uart_buffer), format, args);
+    va_end(args);
+    print_uart(uart_buffer);
+}
+
+/**
+  * @brief  Read ADC channel and return voltage in mV
+  */
+static uint32_t read_adc_voltage_mv(uint32_t channel)
+{
+    ADC_ChannelConfTypeDef sConfig = {0};
+    uint32_t adc_value;
+
+    sConfig.Channel = channel;
+    sConfig.Rank = 1;
+    sConfig.SamplingTime = ADC_SAMPLETIME_480CYCLES;
+    HAL_ADC_ConfigChannel(&hadc1, &sConfig);
+
+    HAL_ADC_Start(&hadc1);
+    if (HAL_ADC_PollForConversion(&hadc1, 100) == HAL_OK) {
+        adc_value = HAL_ADC_GetValue(&hadc1);
+    } else {
+        adc_value = 0;
+    }
+    HAL_ADC_Stop(&hadc1);
+
+    // Convert to millivolts (assuming 3.3V reference, 12-bit ADC)
+    return (adc_value * 3300) / 4095;
+}
+
+/* Public Functions ----------------------------------------------------------*/
+
+/**
+  * @brief  Initialize test firmware
+  */
+void BMU_Test_Init(void)
+{
+    print_uart("\r\n");
+    print_uart("======================================\r\n");
+    print_uart("  BMU Test Firmware v2.0\r\n");
+    print_uart("  STM32F413ZHT3\r\n");
+    print_uart("======================================\r\n");
+    print_uart("\r\nCommands:\r\n");
+    print_uart("  o - Test all outputs (one by one)\r\n");
+    print_uart("  i - Read all digital inputs\r\n");
+    print_uart("  a - Read all analog inputs\r\n");
+    print_uart("  l - Toggle LED\r\n");
+    print_uart("  h - Show this menu\r\n");
+    print_uart("\r\n");
+
+    // Turn off all outputs initially
+    for (uint8_t i = 0; i < NUM_OUTPUTS; i++) {
+        HAL_GPIO_WritePin(all_outputs[i].port, all_outputs[i].pin, GPIO_PIN_RESET);
+    }
+
+    // Turn off LED
+    HAL_GPIO_WritePin(GPIOG, GPIO_PIN_7, GPIO_PIN_RESET);
+}
+
+/**
+  * @brief  Test all outputs one by one
+  */
+void BMU_Test_Outputs(void)
+{
+    print_uart("\r\n=== Testing All Outputs ===\r\n");
+    print_uart("Turning ON each output for 500ms...\r\n\r\n");
+
+    for (uint8_t i = 0; i < NUM_OUTPUTS; i++) {
+        // Turn ON current output
+        HAL_GPIO_WritePin(all_outputs[i].port, all_outputs[i].pin, GPIO_PIN_SET);
+
+        printf_uart("[%02d/%02d] %s = ON\r\n", i+1, NUM_OUTPUTS, all_outputs[i].name);
+
+        HAL_Delay(500);
+
+        // Turn OFF current output
+        HAL_GPIO_WritePin(all_outputs[i].port, all_outputs[i].pin, GPIO_PIN_RESET);
+    }
+
+    print_uart("\r\nOutput test complete!\r\n\r\n");
+}
+
+/**
+  * @brief  Read all digital inputs
+  */
+void BMU_Test_Digital_Inputs(void)
+{
+    print_uart("\r\n=== Digital Input Status ===\r\n");
+
+    for (uint8_t i = 0; i < NUM_DIGITAL_INPUTS; i++) {
+        GPIO_PinState state = HAL_GPIO_ReadPin(all_digital_inputs[i].port,
+                                                all_digital_inputs[i].pin);
+
+        printf_uart("%s: %s\r\n",
+                   all_digital_inputs[i].name,
+                   (state == GPIO_PIN_SET) ? "HIGH" : "LOW");
+    }
+
+    print_uart("\r\n");
+}
+
+/**
+  * @brief  Read all analog inputs
+  */
+void BMU_Test_Analog_Inputs(void)
+{
+    print_uart("\r\n=== Analog Input Voltages ===\r\n");
+
+    for (uint8_t i = 0; i < NUM_ADC_CHANNELS; i++) {
+        uint32_t voltage_mv = read_adc_voltage_mv(adc_channels[i].channel);
+
+        printf_uart("%s: %lu mV (%.3f V)\r\n",
+                   adc_channels[i].name,
+                   voltage_mv,
+                   voltage_mv / 1000.0f);
+    }
+
+    print_uart("\r\n");
+}
+
+/**
+  * @brief  Toggle LED
+  */
+void BMU_Test_LED_Toggle(void)
+{
+    HAL_GPIO_TogglePin(GPIOG, GPIO_PIN_7);
+    printf_uart("\r\nLED toggled!\r\n\r\n");
+}
+
+/**
+  * @brief  Process command from UART
+  */
+void BMU_Test_ProcessCommand(char cmd)
+{
+    switch(cmd) {
+        case 'o':
+        case 'O':
+            BMU_Test_Outputs();
             break;
-        case TEST_FAIL:
-            test_stats.failed_tests++;
+
+        case 'i':
+        case 'I':
+            BMU_Test_Digital_Inputs();
             break;
-        case TEST_SKIP:
-            test_stats.skipped_tests++;
+
+        case 'a':
+        case 'A':
+            BMU_Test_Analog_Inputs();
+            break;
+
+        case 'l':
+        case 'L':
+            BMU_Test_LED_Toggle();
+            break;
+
+        case 'h':
+        case 'H':
+            BMU_Test_Init();  // Show menu again
+            break;
+
+        default:
+            printf_uart("\r\nUnknown command: '%c'\r\n", cmd);
+            printf_uart("Type 'h' for help\r\n\r\n");
             break;
     }
 }

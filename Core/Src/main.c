@@ -138,14 +138,6 @@ int main(void)
       BMU_Test_ProcessCommand(uart_cmd_char);  // Process command
     }
 
-    // LED heartbeat (slow blink to show system is alive)
-    static uint32_t last_led_toggle = 0;
-    if(HAL_GetTick() - last_led_toggle >= 1000)
-    {
-      last_led_toggle = HAL_GetTick();
-      HAL_GPIO_TogglePin(GPIOG, GPIO_PIN_7);  // LED on PG7
-    }
-
     // Small delay to prevent busy loop
     HAL_Delay(10);
 

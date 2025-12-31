@@ -95,6 +95,19 @@ Vsak modul ima:
 
 ## Uporaba testnega firmware-a
 
+### ⚡ Auto-Test Mode (Samodejno testiranje)
+
+**Firmware se samodejno zažene po 10 sekundah!**
+
+Ko mikrokrmilnik bootup:
+1. Izpiše "Auto-test will start in 10 seconds..."
+2. Po 10 sekundah **samodejno** zažene full self-test
+3. Izpisuje samo rezultate (PASS/FAIL) na UART
+4. Po končanem testu počaka še 10 sekund in **ponovi test**
+5. Test se **periodično ponavlja** vsake 10 sekund
+
+**Cancellation**: Pritisni katerokoli tipko pred 10 sekundami, da prekličeš auto-test in greš v interactive mode.
+
 ### 1. Nalaganje firmware-a
 
 1. Odpri projekt v STM32CubeIDE
@@ -202,87 +215,35 @@ Firmware samodejno zazna in prikaže naslednje dogodke:
 [IRQ] Temperature Alert!             - TMP_ALRT (PC13)
 ```
 
-## Primer testa
+## Primer testa (Auto-Test Mode)
 
 ```
-Enter command: 9
+=================================
+BMU Test Firmware v1.0
+STM32F413ZHT3 Battery Management Unit
+=================================
+
+Initialization complete!
+
+Auto-test will start in 10 seconds...
+Press any key to cancel auto-test.
+
+▶ Starting auto-test...
 
 ╔════════════════════════════════════╗
 ║   BMU FULL SELF-TEST SEQUENCE      ║
 ╚════════════════════════════════════╝
 
-[1/10] LED Test...
-Blinking LED (PG7) 5 times...
-LED Test: PASS
-
-[2/10] Power Control Test...
-Testing power control signals...
-  Enabling 24V power...
-  Enabling 3V power...
-  Enabling 3V3A power...
-  Entering sleep mode...
-  Exiting sleep mode...
-  Power Control Test: PASS
-
-[3/10] Power Good Test...
-Reading power good signals...
-  5V Power Good: OK
-  3V3A Power Good: OK
-  Power Good Test: PASS
-
-[4/10] GPIO Outputs Test...
-Testing all module outputs...
-  Module 0: OK
-  Module 1: OK
-  Module 2: OK
-  Module 3: OK
-  Module 4: OK
-  Module 5: OK
-GPIO Output Test: PASS
-
-[5/10] GPIO Inputs Test...
-Reading all digital inputs (IN_0 to IN_20):
-
-  IN_0=0  IN_1=0  IN_2=0  IN_3=0  IN_4=0
-  IN_5=0  IN_6=0  IN_7=0  IN_8=0  IN_9=0
-  IN_10=0  IN_11=0  IN_12=0  IN_13=0  IN_14=0
-  IN_15=0  IN_16=0  IN_17=0  IN_18=0  IN_19=0
-  IN_20=0
-
-GPIO Input Test: PASS
-
-[6/10] ADC Channels Test...
-Reading all ADC channels (IN0-IN15):
-
-  CH00:  125mV  CH01:  130mV  CH02:  127mV  CH03:  128mV
-  CH04:  126mV  CH05:  129mV  CH06:  131mV  CH07:  127mV
-  CH08:  125mV  CH09:  128mV  CH10:  130mV  CH11:  127mV
-  CH12:  126mV  CH13:  129mV  CH14:  128mV  CH15:  127mV
-
-ADC Test: PASS
-
-[7/10] CAN Test...
-Testing CAN1...
-  CAN1 TX: ID=0x123, Data sent
-  CAN1 Test: PASS (Loopback required for RX)
-Testing CAN2...
-  CAN2 TX: ID=0x456, Data sent
-  CAN2 Test: PASS (Loopback required for RX)
-
-[8/10] SPI4 Test...
-Testing SPI4 (IsoSPI interface)...
-  SPI4 TX: 0xAA 0x55 0xF0 0x0F
-  SPI4 RX: 0x00 0x00 0x00 0x00
-  SPI4 Test: PASS (Check with logic analyzer)
-
-[9/10] I2C2 Test...
-Testing I2C2 (scanning for devices)...
-  Found device at address 0x48
-  I2C2 Test: PASS (Found 1 device(s))
-
-[10/10] UART1 Test...
-Testing UART1...
-  UART1 Test: PASS
+[1/10] LED Test... PASS
+[2/10] Power Control Test... PASS
+[3/10] Power Good Test... PASS
+[4/10] GPIO Outputs Test... PASS
+[5/10] GPIO Inputs Test... PASS
+[6/10] ADC Channels Test... PASS
+[7/10] CAN Test... PASS
+[8/10] SPI4 Test... PASS
+[9/10] I2C2 Test... SKIP
+[10/10] UART1 Test... PASS
 
 ╔════════════════════════════════════╗
 ║   SELF-TEST RESULTS                ║
@@ -290,12 +251,15 @@ Testing UART1...
 
 --- Test Statistics ---
 Total Tests:  12
-Passed:       12
+Passed:       11
 Failed:       0
-Skipped:      0
-Pass Rate:    100%
+Skipped:      1
+Pass Rate:    91%
 
 ✓ ALL TESTS PASSED! System OK.
+
+
+(Po 10 sekundah se test ponovi...)
 ```
 
 ## Debugging
