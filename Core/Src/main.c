@@ -73,6 +73,8 @@ static void MX_I2C2_Init(void);
 
 // UART receive buffer for commands
 static uint8_t uart_rx_byte;
+static volatile uint8_t uart_cmd_pending = 0;
+static volatile char uart_cmd_char = 0;
 
 /* USER CODE END 0 */
 
@@ -129,10 +131,23 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-    // Main loop - commands are processed via UART interrupt
+    // Process UART commands if pending
+    if(uart_cmd_pending)
+    {
+      uart_cmd_pending = 0;  // Clear flag
+      BMU_Test_ProcessCommand(uart_cmd_char);  // Process command
+    }
+
     // LED heartbeat (slow blink to show system is alive)
-    HAL_GPIO_TogglePin(GPIOG, GPIO_PIN_7);  // LED on PG7
-    HAL_Delay(1000);
+    static uint32_t last_led_toggle = 0;
+    if(HAL_GetTick() - last_led_toggle >= 1000)
+    {
+      last_led_toggle = HAL_GetTick();
+      HAL_GPIO_TogglePin(GPIOG, GPIO_PIN_7);  // LED on PG7
+    }
+
+    // Small delay to prevent busy loop
+    HAL_Delay(10);
 
   }
   /* USER CODE END 3 */
@@ -602,8 +617,9 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
   if(huart->Instance == USART1)
   {
-    // Process received command
-    BMU_Test_ProcessCommand((char)uart_rx_byte);
+    // Set flag and save character for processing in main loop
+    uart_cmd_char = (char)uart_rx_byte;
+    uart_cmd_pending = 1;
 
     // Restart UART receive interrupt
     HAL_UART_Receive_IT(&huart1, &uart_rx_byte, 1);

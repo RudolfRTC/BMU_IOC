@@ -303,6 +303,12 @@ Pass Rate:    100%
 ### LED heartbeat
 LED na PG7 bo utripal vsakih 1 sekundo - to pomeni da sistem deluje.
 
+### UART Command Processing
+Ukazi se procesirajo asinhrono:
+- UART interrupt samo prejme znak in nastavi flag
+- Main loop procesira ukaz (ne v interrupt context-u)
+- To zagotavlja responsive terminal brez blokiranja
+
 ### UART ni odziven
 - Preveri baudrate (115200)
 - Preveri TX/RX pinov (PB6/PB7)
