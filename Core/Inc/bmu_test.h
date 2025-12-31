@@ -25,6 +25,9 @@ void BMU_Test_Analog_Inputs(void);
 void BMU_Test_LED_Toggle(void);
 void BMU_Test_ProcessCommand(char cmd);
 
+/* Utility function */
+void BMU_Printf(const char* format, ...);
+
 #ifdef __cplusplus
 }
 #endif

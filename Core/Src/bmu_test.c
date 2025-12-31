@@ -128,6 +128,18 @@ static void printf_uart(const char* format, ...)
 }
 
 /**
+  * @brief  Public printf function for other modules (like stm32f4xx_it.c)
+  */
+void BMU_Printf(const char* format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    vsnprintf(uart_buffer, sizeof(uart_buffer), format, args);
+    va_end(args);
+    print_uart(uart_buffer);
+}
+
+/**
   * @brief  Read ADC channel and return voltage in mV
   */
 static uint32_t read_adc_voltage_mv(uint32_t channel)
