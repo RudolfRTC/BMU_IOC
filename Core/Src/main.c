@@ -21,7 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "bmu_test.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -71,6 +71,9 @@ static void MX_I2C2_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+// UART receive buffer for commands
+static uint8_t uart_rx_byte;
+
 /* USER CODE END 0 */
 
 /**
@@ -110,6 +113,12 @@ int main(void)
   MX_I2C2_Init();
   /* USER CODE BEGIN 2 */
 
+  // Initialize BMU test suite
+  BMU_Test_Init();
+
+  // Start UART receive interrupt for command input
+  HAL_UART_Receive_IT(&huart1, &uart_rx_byte, 1);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -119,8 +128,12 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
-	  HAL_Delay(500);
+
+    // Main loop - commands are processed via UART interrupt
+    // LED heartbeat (slow blink to show system is alive)
+    HAL_GPIO_TogglePin(GPIOG, GPIO_PIN_7);  // LED on PG7
+    HAL_Delay(1000);
+
   }
   /* USER CODE END 3 */
 }
@@ -579,6 +592,23 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+/**
+  * @brief  UART Receive Complete Callback
+  * @param  huart: UART handle
+  * @retval None
+  */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+  if(huart->Instance == USART1)
+  {
+    // Process received command
+    BMU_Test_ProcessCommand((char)uart_rx_byte);
+
+    // Restart UART receive interrupt
+    HAL_UART_Receive_IT(&huart1, &uart_rx_byte, 1);
+  }
+}
 
 /* USER CODE END 4 */
 
