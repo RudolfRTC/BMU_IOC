@@ -34,18 +34,18 @@ extern UART_HandleTypeDef huart1;
 
 /* Module output pin mappings based on corrected IOC file */
 static const GPIO_Pin_t module_outputs[NUM_MODULES][OUTPUTS_PER_MODULE] = {
-    // Module 0: PE13, PE14, PE15, PB10 (OUT3_0, OUT2_0, OUT1_0, OUT3_0)
+    // Module 0: OUT3_0 (PE13), OUT2_0 (PE14), OUT1_0 (PE15), OUT3_0 (PB10)
     {{GPIOE, GPIO_PIN_13}, {GPIOE, GPIO_PIN_14}, {GPIOE, GPIO_PIN_15}, {GPIOB, GPIO_PIN_10}},
-    // Module 1: PD10, PD11, PD12, PD13 (OUT0_1, OUT1_1, OUT2_1, OUT3_1)
+    // Module 1: OUT0_1 (PD10), OUT1_1 (PD11), OUT2_1 (PD12), OUT3_1 (PD13)
     {{GPIOD, GPIO_PIN_10}, {GPIOD, GPIO_PIN_11}, {GPIOD, GPIO_PIN_12}, {GPIOD, GPIO_PIN_13}},
-    // Module 2: PG6, PG3, PG4, PG5 (OUT0_2, OUT0_2, OUT1_2, OUT1_2)
+    // Module 2: OUT0_2 (PG6), OUT0_2 (PG3), OUT1_2 (PG4/PG5)
     {{GPIOG, GPIO_PIN_6}, {GPIOG, GPIO_PIN_3}, {GPIOG, GPIO_PIN_4}, {GPIOG, GPIO_PIN_5}},
-    // Module 3: PA8, PA9, PA10, PA11 (OUT0_3, OUT1_3, OUT2_3, OUT3_3)
+    // Module 3: OUT0_3 (PA8), OUT1_3 (PA9), OUT2_3 (PA10), OUT3_3 (PA11)
     {{GPIOA, GPIO_PIN_8}, {GPIOA, GPIO_PIN_9}, {GPIOA, GPIO_PIN_10}, {GPIOA, GPIO_PIN_11}},
-    // Module 4: PC12, PD0, PD1, PD2 (OUT0_4, OUT1_4, OUT2_4, OUT3_4)
+    // Module 4: OUT0_4 (PC12), OUT1_4 (PD0), OUT2_4 (PD1), OUT3_4 (PD2)
     {{GPIOC, GPIO_PIN_12}, {GPIOD, GPIO_PIN_0}, {GPIOD, GPIO_PIN_1}, {GPIOD, GPIO_PIN_2}},
-    // Module 5: PD6, PD7, PG9, PG10 (OUT0_5, OUT1_5, OUT2_5, OUT3_5)
-    {{GPIOD, GPIO_PIN_6}, {GPIOD, GPIO_PIN_7}, {GPIOG, GPIO_PIN_9}, {GPIOG, GPIO_PIN_10}}
+    // Module 5: OUT0_5 (PD6), OUT1_5 (PD7), OUT3_5 (PG10) - NOTE: OUT2_5 doesn't exist, PG9 is LEM_OC10 interrupt!
+    {{GPIOD, GPIO_PIN_6}, {GPIOD, GPIO_PIN_7}, {GPIOG, GPIO_PIN_10}, {GPIOG, GPIO_PIN_10}}  // OUT2 = OUT3 (only 3 outputs)
 };
 
 /* Module enable pins (DEN_x) */
