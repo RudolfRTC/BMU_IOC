@@ -76,6 +76,10 @@ static uint8_t uart_rx_byte;
 static volatile uint8_t uart_cmd_pending = 0;
 static volatile char uart_cmd_char = 0;
 
+// Auto-start test after 10 seconds
+static uint8_t auto_test_started = 0;
+static uint32_t start_time = 0;
+
 /* USER CODE END 0 */
 
 /**
@@ -121,6 +125,12 @@ int main(void)
   // Start UART receive interrupt for command input
   HAL_UART_Receive_IT(&huart1, &uart_rx_byte, 1);
 
+  // Save start time for auto-test
+  start_time = HAL_GetTick();
+
+  BMU_Printf("\r\nAuto-test will start in 10 seconds...\r\n");
+  BMU_Printf("Press any key to cancel auto-test.\r\n\r\n");
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -135,7 +145,20 @@ int main(void)
     if(uart_cmd_pending)
     {
       uart_cmd_pending = 0;  // Clear flag
+      auto_test_started = 1;  // Cancel auto-test if user sends command
       BMU_Test_ProcessCommand(uart_cmd_char);  // Process command
+    }
+
+    // Auto-start test after 10 seconds
+    if(!auto_test_started && (HAL_GetTick() - start_time >= 10000))
+    {
+      auto_test_started = 1;
+      BMU_Printf("\r\n▶ Starting auto-test...\r\n");
+      BMU_Test_SelfTest();
+
+      // After test completes, restart timer for periodic testing
+      start_time = HAL_GetTick();
+      auto_test_started = 0;  // Re-enable for next cycle
     }
 
     // LED heartbeat (slow blink to show system is alive)
