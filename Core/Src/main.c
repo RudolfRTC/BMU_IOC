@@ -21,7 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "bmu_test.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -71,6 +71,11 @@ static void MX_I2C2_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+// UART receive buffer for commands
+static uint8_t uart_rx_byte;
+static volatile uint8_t uart_cmd_pending = 0;
+static volatile char uart_cmd_char = 0;
+
 /* USER CODE END 0 */
 
 /**
@@ -110,6 +115,12 @@ int main(void)
   MX_I2C2_Init();
   /* USER CODE BEGIN 2 */
 
+  // Initialize BMU test suite
+  BMU_Test_Init();
+
+  // Start UART receive interrupt for command input
+  HAL_UART_Receive_IT(&huart1, &uart_rx_byte, 1);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -119,8 +130,25 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
-	  HAL_Delay(500);
+
+    // Process UART commands if pending
+    if(uart_cmd_pending)
+    {
+      uart_cmd_pending = 0;  // Clear flag
+      BMU_Test_ProcessCommand(uart_cmd_char);  // Process command
+    }
+
+    // LED heartbeat (slow blink to show system is alive)
+    static uint32_t last_led_toggle = 0;
+    if(HAL_GetTick() - last_led_toggle >= 1000)
+    {
+      last_led_toggle = HAL_GetTick();
+      HAL_GPIO_TogglePin(GPIOG, GPIO_PIN_7);  // LED on PG7
+    }
+
+    // Small delay to prevent busy loop
+    HAL_Delay(10);
+
   }
   /* USER CODE END 3 */
 }
@@ -579,6 +607,24 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+/**
+  * @brief  UART Receive Complete Callback
+  * @param  huart: UART handle
+  * @retval None
+  */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+  if(huart->Instance == USART1)
+  {
+    // Set flag and save character for processing in main loop
+    uart_cmd_char = (char)uart_rx_byte;
+    uart_cmd_pending = 1;
+
+    // Restart UART receive interrupt
+    HAL_UART_Receive_IT(&huart1, &uart_rx_byte, 1);
+  }
+}
 
 /* USER CODE END 4 */
 

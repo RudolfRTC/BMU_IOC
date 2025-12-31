@@ -22,6 +22,7 @@
 #include "stm32f4xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "bmu_test.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -55,6 +56,7 @@
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
+extern UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN EV */
 
@@ -199,5 +201,115 @@ void SysTick_Handler(void)
 /******************************************************************************/
 
 /* USER CODE BEGIN 1 */
+
+/**
+  * @brief This function handles USART1 global interrupt.
+  */
+void USART1_IRQHandler(void)
+{
+  /* USER CODE BEGIN USART1_IRQn 0 */
+
+  /* USER CODE END USART1_IRQn 0 */
+  HAL_UART_IRQHandler(&huart1);
+  /* USER CODE BEGIN USART1_IRQn 1 */
+
+  /* USER CODE END USART1_IRQn 1 */
+}
+
+/**
+  * @brief This function handles EXTI line2 interrupt (PWR_FLT).
+  */
+void EXTI2_IRQHandler(void)
+{
+  HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_2);
+}
+
+/**
+  * @brief This function handles EXTI line[9:5] interrupts.
+  *        Handles: OC_7 (PE9), OC_4 (PC6), PG9 (LEM_OC10), OC_9 (PG8)
+  */
+void EXTI9_5_IRQHandler(void)
+{
+  /* USER CODE BEGIN EXTI9_5_IRQn 0 */
+
+  /* USER CODE END EXTI9_5_IRQn 0 */
+  if(__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_6) != RESET) {
+    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_6);  // OC_4
+  }
+  if(__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_8) != RESET) {
+    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_8);  // OC_9
+  }
+  if(__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_9) != RESET) {
+    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_9);  // OC_7 or LEM_OC10
+  }
+  /* USER CODE BEGIN EXTI9_5_IRQn 1 */
+
+  /* USER CODE END EXTI9_5_IRQn 1 */
+}
+
+/**
+  * @brief This function handles EXTI line[15:10] interrupts.
+  *        Handles: OC_2 (PB11), PG_3V3A (PF12), TMP_ALRT (PC13)
+  */
+void EXTI15_10_IRQHandler(void)
+{
+  /* USER CODE BEGIN EXTI15_10_IRQn 0 */
+
+  /* USER CODE END EXTI15_10_IRQn 0 */
+  if(__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_11) != RESET) {
+    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_11);  // OC_2
+  }
+  if(__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_12) != RESET) {
+    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_12);  // PG_3V3A
+  }
+  if(__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_13) != RESET) {
+    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_13);  // TMP_ALRT
+  }
+  /* USER CODE BEGIN EXTI15_10_IRQn 1 */
+
+  /* USER CODE END EXTI15_10_IRQn 1 */
+}
+
+/**
+  * @brief EXTI line detection callbacks
+  * @param GPIO_Pin: Specifies the pins connected to the EXTI line.
+  */
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+  /* USER CODE BEGIN HAL_GPIO_EXTI_Callback */
+  switch(GPIO_Pin) {
+    case GPIO_PIN_2:   // PWR_FLT
+      BMU_Printf("\r\n[IRQ] Power Fault detected!\r\n");
+      break;
+
+    case GPIO_PIN_6:   // OC_4
+      BMU_Printf("\r\n[IRQ] Overcurrent 4 detected!\r\n");
+      break;
+
+    case GPIO_PIN_8:   // OC_9
+      BMU_Printf("\r\n[IRQ] Overcurrent 9 detected!\r\n");
+      break;
+
+    case GPIO_PIN_9:   // OC_7 or LEM_OC10
+      BMU_Printf("\r\n[IRQ] Overcurrent 7/10 detected!\r\n");
+      break;
+
+    case GPIO_PIN_11:  // OC_2
+      BMU_Printf("\r\n[IRQ] Overcurrent 2 detected!\r\n");
+      break;
+
+    case GPIO_PIN_12:  // PG_3V3A
+      BMU_Printf("\r\n[IRQ] 3V3A Power Good changed!\r\n");
+      break;
+
+    case GPIO_PIN_13:  // TMP_ALRT
+      BMU_Printf("\r\n[IRQ] Temperature Alert!\r\n");
+      break;
+
+    default:
+      break;
+  }
+  /* USER CODE END HAL_GPIO_EXTI_Callback */
+}
 
 /* USER CODE END 1 */
