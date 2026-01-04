@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * @file           : bmu_test.h
-  * @brief          : BMU Simple Test Suite Header
+  * @brief          : BMU Test Suite with BTT6200-4ESA Driver
   ******************************************************************************
   */
 
@@ -16,6 +16,7 @@ extern "C" {
 #include "stm32f4xx_hal.h"
 #include <stdint.h>
 #include <stdarg.h>
+#include "btt6200_config.h"
 
 /* Public function prototypes ------------------------------------------------*/
 void BMU_Test_Init(void);
@@ -23,6 +24,7 @@ void BMU_Test_Outputs(void);
 void BMU_Test_Digital_Inputs(void);
 void BMU_Test_Analog_Inputs(void);
 void BMU_Test_LED_Toggle(void);
+void BMU_Test_CurrentSensing(void);
 void BMU_Test_ProcessCommand(char cmd);
 
 #ifdef __cplusplus
