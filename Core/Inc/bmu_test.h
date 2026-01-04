@@ -18,6 +18,8 @@ extern "C" {
 #include <stdarg.h>
 #include "btt6200_config.h"
 #include "ltc6811_config.h"
+#include "tmp1075.h"
+#include "cy15b256j.h"
 
 /* Public function prototypes ------------------------------------------------*/
 void BMU_Test_Init(void);
@@ -28,6 +30,8 @@ void BMU_Test_LED_Toggle(void);
 void BMU_Test_CurrentSensing(void);
 void BMU_Test_BatteryVoltages(void);
 void BMU_Test_BatteryBalancing(void);
+void BMU_Test_Temperature(void);
+void BMU_Test_FRAM(void);
 void BMU_Test_ProcessCommand(char cmd);
 
 #ifdef __cplusplus

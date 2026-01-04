@@ -14,9 +14,12 @@
 extern ADC_HandleTypeDef hadc1;
 extern UART_HandleTypeDef huart1;
 extern SPI_HandleTypeDef hspi4;
+extern I2C_HandleTypeDef hi2c2;
 
 /* Private variables ---------------------------------------------------------*/
 static char uart_buffer[256];
+static TMP1075_HandleTypeDef tmp1075_handle;
+static CY15B256J_HandleTypeDef fram_handle;
 
 // Output names lookup table
 static const char* output_names[BTT6200_NUM_OUTPUTS] = {
@@ -141,35 +144,54 @@ void BMU_Test_Init(void)
 {
     print_uart("\r\n");
     print_uart("======================================\r\n");
-    print_uart("  BMU Test Firmware v4.0\r\n");
+    print_uart("  BMU Test Firmware v5.0\r\n");
     print_uart("  STM32F413ZHT3\r\n");
-    print_uart("  BTT6200-4ESA + LTC6811 Drivers\r\n");
+    print_uart("  Full BMU System Drivers\r\n");
     print_uart("======================================\r\n");
     print_uart("\r\nCommands:\r\n");
-    print_uart("  o - Test all outputs (one by one)\r\n");
-    print_uart("  i - Read all digital inputs\r\n");
-    print_uart("  a - Read all analog inputs\r\n");
-    print_uart("  c - Current sensing (all outputs)\r\n");
-    print_uart("  b - Battery cell voltages (LTC6811)\r\n");
+    print_uart("  o - Test all outputs\r\n");
+    print_uart("  i - Read digital inputs\r\n");
+    print_uart("  a - Read analog inputs\r\n");
+    print_uart("  c - Current sensing\r\n");
+    print_uart("  b - Battery voltages (LTC6811)\r\n");
     print_uart("  B - Battery balancing test\r\n");
+    print_uart("  t - Temperature (TMP1075)\r\n");
+    print_uart("  f - FRAM test\r\n");
     print_uart("  l - Toggle LED\r\n");
-    print_uart("  h - Show this menu\r\n");
+    print_uart("  h - Help menu\r\n");
     print_uart("\r\n");
 
     // Initialize BTT6200-4ESA modules
-    printf_uart("Initializing BTT6200-4ESA modules...\r\n");
+    printf_uart("Init BTT6200-4ESA...\r\n");
     if (BTT6200_Config_Init(&hadc1) == HAL_OK) {
-        printf_uart("BTT6200 modules initialized OK\r\n");
+        printf_uart("  OK\r\n");
     } else {
-        printf_uart("ERROR: BTT6200 initialization failed!\r\n");
+        printf_uart("  ERROR!\r\n");
     }
 
     // Initialize LTC6811 battery monitoring
-    printf_uart("Initializing LTC6811 battery monitor...\r\n");
+    printf_uart("Init LTC6811...\r\n");
     if (LTC6811_Config_Init(&hspi4) == HAL_OK) {
-        printf_uart("LTC6811 initialized OK\r\n");
+        printf_uart("  OK\r\n");
     } else {
-        printf_uart("ERROR: LTC6811 initialization failed!\r\n");
+        printf_uart("  ERROR!\r\n");
+    }
+
+    // Initialize TMP1075 temperature sensor
+    printf_uart("Init TMP1075...\r\n");
+    if (TMP1075_Init(&tmp1075_handle, &hi2c2, TMP1075_I2C_ADDR_DEFAULT) == HAL_OK) {
+        printf_uart("  OK\r\n");
+    } else {
+        printf_uart("  ERROR!\r\n");
+    }
+
+    // Initialize FRAM
+    printf_uart("Init FRAM...\r\n");
+    if (CY15B256J_Init(&fram_handle, &hi2c2, CY15B256J_I2C_ADDR_DEFAULT,
+                      GPIOA, WP_FRAM_Pin) == HAL_OK) {
+        printf_uart("  OK\r\n");
+    } else {
+        printf_uart("  ERROR!\r\n");
     }
 
     // Turn off all outputs initially
@@ -375,6 +397,69 @@ void BMU_Test_BatteryBalancing(void)
 }
 
 /**
+  * @brief  Test temperature sensor (TMP1075)
+  */
+void BMU_Test_Temperature(void)
+{
+    print_uart("\r\n=== Temperature Sensor (TMP1075) ===\r\n");
+
+    float temperature;
+    HAL_StatusTypeDef status = TMP1075_ReadTemperature(&tmp1075_handle, &temperature);
+
+    if (status == HAL_OK) {
+        printf_uart("Temperature: %.2f °C\r\n", temperature);
+    } else {
+        print_uart("ERROR: Failed to read temperature!\r\n");
+    }
+
+    print_uart("\r\n");
+}
+
+/**
+  * @brief  Test FRAM (CY15B256J)
+  */
+void BMU_Test_FRAM(void)
+{
+    print_uart("\r\n=== FRAM Test (CY15B256J) ===\r\n");
+
+    // Test pattern
+    uint8_t write_data[] = "BMU_TEST_2025";
+    uint8_t read_data[32];
+    uint16_t test_addr = 0x0100;
+
+    // Write test
+    printf_uart("Writing to FRAM address 0x%04X...\r\n", test_addr);
+    HAL_StatusTypeDef status = CY15B256J_Write(&fram_handle, test_addr, write_data, sizeof(write_data));
+
+    if (status == HAL_OK) {
+        print_uart("Write OK\r\n");
+    } else {
+        print_uart("Write ERROR!\r\n\r\n");
+        return;
+    }
+
+    // Read test
+    printf_uart("Reading from FRAM...\r\n");
+    status = CY15B256J_Read(&fram_handle, test_addr, read_data, sizeof(write_data));
+
+    if (status == HAL_OK) {
+        print_uart("Read OK\r\n");
+
+        // Verify
+        if (memcmp(write_data, read_data, sizeof(write_data)) == 0) {
+            print_uart("Verification: PASS\r\n");
+            printf_uart("Data: %s\r\n", read_data);
+        } else {
+            print_uart("Verification: FAIL\r\n");
+        }
+    } else {
+        print_uart("Read ERROR!\r\n");
+    }
+
+    print_uart("\r\nFRAM test complete!\r\n\r\n");
+}
+
+/**
   * @brief  Process command from UART
   */
 void BMU_Test_ProcessCommand(char cmd)
@@ -406,6 +491,16 @@ void BMU_Test_ProcessCommand(char cmd)
 
         case 'B':
             BMU_Test_BatteryBalancing();
+            break;
+
+        case 't':
+        case 'T':
+            BMU_Test_Temperature();
+            break;
+
+        case 'f':
+        case 'F':
+            BMU_Test_FRAM();
             break;
 
         case 'l':
