@@ -17,6 +17,7 @@ extern "C" {
 #include <stdint.h>
 #include <stdarg.h>
 #include "btt6200_config.h"
+#include "ltc6811_config.h"
 
 /* Public function prototypes ------------------------------------------------*/
 void BMU_Test_Init(void);
@@ -25,6 +26,8 @@ void BMU_Test_Digital_Inputs(void);
 void BMU_Test_Analog_Inputs(void);
 void BMU_Test_LED_Toggle(void);
 void BMU_Test_CurrentSensing(void);
+void BMU_Test_BatteryVoltages(void);
+void BMU_Test_BatteryBalancing(void);
 void BMU_Test_ProcessCommand(char cmd);
 
 #ifdef __cplusplus

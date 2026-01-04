@@ -13,6 +13,7 @@
 /* External handles ----------------------------------------------------------*/
 extern ADC_HandleTypeDef hadc1;
 extern UART_HandleTypeDef huart1;
+extern SPI_HandleTypeDef hspi4;
 
 /* Private variables ---------------------------------------------------------*/
 static char uart_buffer[256];
@@ -140,15 +141,17 @@ void BMU_Test_Init(void)
 {
     print_uart("\r\n");
     print_uart("======================================\r\n");
-    print_uart("  BMU Test Firmware v3.0\r\n");
+    print_uart("  BMU Test Firmware v4.0\r\n");
     print_uart("  STM32F413ZHT3\r\n");
-    print_uart("  BTT6200-4ESA Driver\r\n");
+    print_uart("  BTT6200-4ESA + LTC6811 Drivers\r\n");
     print_uart("======================================\r\n");
     print_uart("\r\nCommands:\r\n");
     print_uart("  o - Test all outputs (one by one)\r\n");
     print_uart("  i - Read all digital inputs\r\n");
     print_uart("  a - Read all analog inputs\r\n");
     print_uart("  c - Current sensing (all outputs)\r\n");
+    print_uart("  b - Battery cell voltages (LTC6811)\r\n");
+    print_uart("  B - Battery balancing test\r\n");
     print_uart("  l - Toggle LED\r\n");
     print_uart("  h - Show this menu\r\n");
     print_uart("\r\n");
@@ -159,6 +162,14 @@ void BMU_Test_Init(void)
         printf_uart("BTT6200 modules initialized OK\r\n");
     } else {
         printf_uart("ERROR: BTT6200 initialization failed!\r\n");
+    }
+
+    // Initialize LTC6811 battery monitoring
+    printf_uart("Initializing LTC6811 battery monitor...\r\n");
+    if (LTC6811_Config_Init(&hspi4) == HAL_OK) {
+        printf_uart("LTC6811 initialized OK\r\n");
+    } else {
+        printf_uart("ERROR: LTC6811 initialization failed!\r\n");
     }
 
     // Turn off all outputs initially
@@ -276,6 +287,94 @@ void BMU_Test_CurrentSensing(void)
 }
 
 /**
+  * @brief  Test battery cell voltages (LTC6811)
+  */
+void BMU_Test_BatteryVoltages(void)
+{
+    print_uart("\r\n=== Battery Cell Voltages (LTC6811) ===\r\n");
+    print_uart("Starting cell voltage measurement...\r\n\r\n");
+
+    // Start measurement
+    HAL_StatusTypeDef status = LTC6811_Config_MeasureCellVoltages();
+    if (status != HAL_OK) {
+        print_uart("ERROR: Failed to start cell voltage measurement!\r\n\r\n");
+        return;
+    }
+
+    // Read voltages
+    uint16_t voltages_mV[LTC6811_MAX_CELLS];
+    status = LTC6811_Config_ReadAllCells_mV(voltages_mV);
+    if (status != HAL_OK) {
+        print_uart("ERROR: Failed to read cell voltages!\r\n\r\n");
+        return;
+    }
+
+    // Print individual cells
+    for (uint8_t i = 0; i < LTC6811_MAX_CELLS; i++) {
+        printf_uart("Cell %02d: %4u mV (%.3f V)\r\n",
+                   i + 1,
+                   voltages_mV[i],
+                   voltages_mV[i] / 1000.0f);
+    }
+
+    // Calculate total pack voltage
+    uint32_t total_voltage_mV = 0;
+    for (uint8_t i = 0; i < LTC6811_MAX_CELLS; i++) {
+        total_voltage_mV += voltages_mV[i];
+    }
+
+    // Find min/max cells
+    uint16_t max_cell_mV, min_cell_mV;
+    uint8_t max_cell_idx, min_cell_idx;
+    LTC6811_Config_GetMinMaxCells(&max_cell_mV, &max_cell_idx,
+                                  &min_cell_mV, &min_cell_idx);
+
+    // Print summary
+    print_uart("\r\n--- Summary ---\r\n");
+    printf_uart("Total Pack Voltage: %lu mV (%.2f V)\r\n",
+               total_voltage_mV,
+               total_voltage_mV / 1000.0f);
+    printf_uart("Max Cell: #%d = %u mV\r\n", max_cell_idx + 1, max_cell_mV);
+    printf_uart("Min Cell: #%d = %u mV\r\n", min_cell_idx + 1, min_cell_mV);
+    printf_uart("Delta: %u mV\r\n", max_cell_mV - min_cell_mV);
+
+    print_uart("\r\nMeasurement complete!\r\n\r\n");
+}
+
+/**
+  * @brief  Test battery balancing
+  */
+void BMU_Test_BatteryBalancing(void)
+{
+    print_uart("\r\n=== Battery Balancing Test ===\r\n");
+    print_uart("This will enable balancing on cells 1-4 for 5 seconds\r\n\r\n");
+
+    // Find which cells need balancing (example: balance cells 1-4)
+    uint16_t balance_mask = 0x000F;  // Cells 1-4 (bits 0-3)
+
+    // Enable balancing
+    printf_uart("Enabling balancing on cells 1-4...\r\n");
+    HAL_StatusTypeDef status = LTC6811_Config_EnableBalancing(balance_mask);
+    if (status != HAL_OK) {
+        print_uart("ERROR: Failed to enable balancing!\r\n\r\n");
+        return;
+    }
+
+    print_uart("Balancing active...\r\n");
+    HAL_Delay(5000);  // Balance for 5 seconds
+
+    // Disable balancing
+    printf_uart("Disabling balancing...\r\n");
+    status = LTC6811_Config_DisableBalancing();
+    if (status != HAL_OK) {
+        print_uart("ERROR: Failed to disable balancing!\r\n\r\n");
+        return;
+    }
+
+    print_uart("\r\nBalancing test complete!\r\n\r\n");
+}
+
+/**
   * @brief  Process command from UART
   */
 void BMU_Test_ProcessCommand(char cmd)
@@ -299,6 +398,14 @@ void BMU_Test_ProcessCommand(char cmd)
         case 'c':
         case 'C':
             BMU_Test_CurrentSensing();
+            break;
+
+        case 'b':
+            BMU_Test_BatteryVoltages();
+            break;
+
+        case 'B':
+            BMU_Test_BatteryBalancing();
             break;
 
         case 'l':
