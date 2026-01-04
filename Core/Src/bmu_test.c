@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * @file           : bmu_test.c
-  * @brief          : BMU Simple Test Suite - Output test & Input monitoring
+  * @brief          : BMU Test Suite with BTT6200-4ESA Driver
   ******************************************************************************
   */
 
@@ -17,36 +17,15 @@ extern UART_HandleTypeDef huart1;
 /* Private variables ---------------------------------------------------------*/
 static char uart_buffer[256];
 
-// All GPIO outputs  (20 total outputs)
-typedef struct {
-    GPIO_TypeDef* port;
-    uint16_t pin;
-    const char* name;
-} Output_t;
-
-static const Output_t all_outputs[] = {
-    {GPIOB, GPIO_PIN_10, "OUT0_0"},
-    {GPIOE, GPIO_PIN_15, "OUT1_0"},
-    {GPIOE, GPIO_PIN_12, "OUT2_0"},
-    {GPIOE, GPIO_PIN_11, "OUT3_0"},
-    {GPIOD, GPIO_PIN_13, "OUT0_1"},
-    {GPIOD, GPIO_PIN_12, "OUT1_1"},
-    {GPIOD, GPIO_PIN_9,  "OUT2_1"},
-    {GPIOD, GPIO_PIN_8,  "OUT3_1"},
-    {GPIOG, GPIO_PIN_6,  "OUT0_2"},
-    {GPIOG, GPIO_PIN_5,  "OUT1_2"},
-    {GPIOG, GPIO_PIN_2,  "OUT2_2"},
-    {GPIOD, GPIO_PIN_15, "OUT3_2"},
-    {GPIOA, GPIO_PIN_8,  "OUT0_3"},
-    {GPIOA, GPIO_PIN_9,  "OUT1_3"},
-    {GPIOA, GPIO_PIN_10, "OUT2_3"},
-    {GPIOA, GPIO_PIN_11, "OUT3_3"},
-    {GPIOA, GPIO_PIN_15, "OUT0_4"},
-    {GPIOC, GPIO_PIN_10, "OUT1_4"},
-    {GPIOD, GPIO_PIN_0,  "OUT2_4"},
-    {GPIOD, GPIO_PIN_1,  "OUT3_4"}
+// Output names lookup table
+static const char* output_names[BTT6200_NUM_OUTPUTS] = {
+    "OUT0_0", "OUT1_0", "OUT2_0", "OUT3_0",
+    "OUT0_1", "OUT1_1", "OUT2_1", "OUT3_1",
+    "OUT0_2", "OUT1_2", "OUT2_2", "OUT3_2",
+    "OUT0_3", "OUT1_3", "OUT2_3", "OUT3_3",
+    "OUT0_4", "OUT1_4", "OUT2_4", "OUT3_4"
 };
-#define NUM_OUTPUTS (sizeof(all_outputs) / sizeof(Output_t))
+#define NUM_OUTPUTS BTT6200_NUM_OUTPUTS
 
 // All digital inputs (20 inputs: IN_1 to IN_20)
 typedef struct {
@@ -161,44 +140,54 @@ void BMU_Test_Init(void)
 {
     print_uart("\r\n");
     print_uart("======================================\r\n");
-    print_uart("  BMU Test Firmware v2.0\r\n");
+    print_uart("  BMU Test Firmware v3.0\r\n");
     print_uart("  STM32F413ZHT3\r\n");
+    print_uart("  BTT6200-4ESA Driver\r\n");
     print_uart("======================================\r\n");
     print_uart("\r\nCommands:\r\n");
     print_uart("  o - Test all outputs (one by one)\r\n");
     print_uart("  i - Read all digital inputs\r\n");
     print_uart("  a - Read all analog inputs\r\n");
+    print_uart("  c - Current sensing (all outputs)\r\n");
     print_uart("  l - Toggle LED\r\n");
     print_uart("  h - Show this menu\r\n");
     print_uart("\r\n");
 
-    // Turn off all outputs initially
-    for (uint8_t i = 0; i < NUM_OUTPUTS; i++) {
-        HAL_GPIO_WritePin(all_outputs[i].port, all_outputs[i].pin, GPIO_PIN_RESET);
+    // Initialize BTT6200-4ESA modules
+    printf_uart("Initializing BTT6200-4ESA modules...\r\n");
+    if (BTT6200_Config_Init(&hadc1) == HAL_OK) {
+        printf_uart("BTT6200 modules initialized OK\r\n");
+    } else {
+        printf_uart("ERROR: BTT6200 initialization failed!\r\n");
     }
+
+    // Turn off all outputs initially
+    BTT6200_Config_DisableAll();
 
     // Turn off LED
     HAL_GPIO_WritePin(GPIOG, GPIO_PIN_7, GPIO_PIN_RESET);
+
+    print_uart("\r\n");
 }
 
 /**
-  * @brief  Test all outputs one by one
+  * @brief  Test all outputs one by one using BTT6200 driver
   */
 void BMU_Test_Outputs(void)
 {
-    print_uart("\r\n=== Testing All Outputs ===\r\n");
+    print_uart("\r\n=== Testing All Outputs (BTT6200) ===\r\n");
     print_uart("Turning ON each output for 500ms...\r\n\r\n");
 
     for (uint8_t i = 0; i < NUM_OUTPUTS; i++) {
         // Turn ON current output
-        HAL_GPIO_WritePin(all_outputs[i].port, all_outputs[i].pin, GPIO_PIN_SET);
+        BTT6200_Config_SetOutput((BMU_Output_t)i, true);
 
-        printf_uart("[%02d/%02d] %s = ON\r\n", i+1, NUM_OUTPUTS, all_outputs[i].name);
+        printf_uart("[%02d/%02d] %s = ON\r\n", i+1, NUM_OUTPUTS, output_names[i]);
 
         HAL_Delay(500);
 
         // Turn OFF current output
-        HAL_GPIO_WritePin(all_outputs[i].port, all_outputs[i].pin, GPIO_PIN_RESET);
+        BTT6200_Config_SetOutput((BMU_Output_t)i, false);
     }
 
     print_uart("\r\nOutput test complete!\r\n\r\n");
@@ -252,6 +241,41 @@ void BMU_Test_LED_Toggle(void)
 }
 
 /**
+  * @brief  Test current sensing for all outputs
+  */
+void BMU_Test_CurrentSensing(void)
+{
+    print_uart("\r\n=== Current Sensing Test ===\r\n");
+    print_uart("Enable outputs first, then read current\r\n\r\n");
+
+    // Enable all outputs for testing
+    print_uart("Enabling all outputs...\r\n");
+    for (uint8_t i = 0; i < NUM_OUTPUTS; i++) {
+        BTT6200_Config_SetOutput((BMU_Output_t)i, true);
+    }
+    HAL_Delay(100);  // Wait for stabilization
+
+    // Read current for each output
+    print_uart("\r\nReading currents:\r\n");
+    for (uint8_t i = 0; i < NUM_OUTPUTS; i++) {
+        uint32_t current_mA = 0;
+        HAL_StatusTypeDef status = BTT6200_Config_ReadCurrent((BMU_Output_t)i, &current_mA);
+
+        if (status == HAL_OK) {
+            printf_uart("%s: %lu mA\r\n", output_names[i], current_mA);
+        } else {
+            printf_uart("%s: ERROR reading current\r\n", output_names[i]);
+        }
+    }
+
+    // Disable all outputs after test
+    print_uart("\r\nDisabling all outputs...\r\n");
+    BTT6200_Config_DisableAll();
+
+    print_uart("\r\nCurrent sensing test complete!\r\n\r\n");
+}
+
+/**
   * @brief  Process command from UART
   */
 void BMU_Test_ProcessCommand(char cmd)
@@ -270,6 +294,11 @@ void BMU_Test_ProcessCommand(char cmd)
         case 'a':
         case 'A':
             BMU_Test_Analog_Inputs();
+            break;
+
+        case 'c':
+        case 'C':
+            BMU_Test_CurrentSensing();
             break;
 
         case 'l':
