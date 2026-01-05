@@ -33,6 +33,7 @@ void BMU_Test_BatteryBalancing(void);
 void BMU_Test_Temperature(void);
 void BMU_Test_FRAM(void);
 void BMU_Test_ProcessCommand(char cmd);
+void BMU_Printf(const char* format, ...);
 
 #ifdef __cplusplus
 }
