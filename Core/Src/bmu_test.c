@@ -7,6 +7,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "bmu_test.h"
+#include "main.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -102,6 +103,18 @@ static void print_uart(const char* str)
   * @brief  Printf to UART
   */
 static void printf_uart(const char* format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    vsnprintf(uart_buffer, sizeof(uart_buffer), format, args);
+    va_end(args);
+    print_uart(uart_buffer);
+}
+
+/**
+  * @brief  Public printf function for use from other modules (like interrupts)
+  */
+void BMU_Printf(const char* format, ...)
 {
     va_list args;
     va_start(args, format);
